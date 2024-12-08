@@ -5,8 +5,7 @@ module testbench;
     wire [7:0] humidity;
     wire [7:0] temperature;
     wire valid;
-
-    // Instantiate the DHT11 module
+    
     DHT11 dht11_inst (
         .clk(clk),
         .reset(reset),
@@ -16,7 +15,6 @@ module testbench;
         .valid(valid)
     );
 
-    // Clock generation for 50 MHz clock (period = 20 ns)
     always begin
         #10 clk = ~clk;  // 50 MHz clock, period = 20ns
     end
@@ -32,7 +30,6 @@ module testbench;
         #20 reset = 0;
         
         #50
-        // Step 1: Test if FPGA pulls the signal low for 18ms (start condition)
         $display("-----------------------");
         $display("Step 1: IDLE Wait...");
         $display("Current state: %d", dht11_inst.current_state);
@@ -82,6 +79,6 @@ module testbench;
         $display("Next state: %d", dht11_inst.next_state);
         $display("Data pin: %d", data);
         $display("-----------------------");
-        $stop;  // End the simulation
+        $stop;  
     end
 endmodule
