@@ -27,10 +27,10 @@ module DHT11 (
 	 
 	assign data = (data_out) ? 1'bz : 1'b0;
 
-    // Internal signals
-    assign start_condition = (counter >= START_LOW); // Signal to start reading
-    assign response_received = (counter >= RESPONSE_WAIT); // Signal DHT11's response
+    assign start_condition = (counter >= START_LOW);
+    assign response_received = (counter >= RESPONSE_WAIT); 
     assign idle_wait_completed = (counter >= IDLE_WAIT);
+	
     /* Rising edge detection for data signal */
     wire data_signal_detected = (data_prev == 0 && data == 1); 
 
