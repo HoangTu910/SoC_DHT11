@@ -23,13 +23,14 @@ module DHT11 (
     // Timing parameters 
     parameter START_LOW = 900000;    // 18 ms 
     parameter RESPONSE_WAIT = 4000;  // 80 µs 
+    parameter IDLE_WAIT = 1000;
 	 
 	assign data = (data_out) ? 1'bz : 1'b0;
 
     // Internal signals
     assign start_condition = (counter >= START_LOW); // Signal to start reading
     assign response_received = (counter >= RESPONSE_WAIT); // Signal DHT11's response
-
+    assign idle_wait_completed = (counter >= IDLE_WAIT);
     /* Rising edge detection for data signal */
     wire data_signal_detected = (data_prev == 0 && data == 1); 
 
@@ -60,11 +61,11 @@ module DHT11 (
         case (current_state)
             IDLE: begin
                 /* wire start_condition = (counter >= START_LOW); */
-                if (start_condition) next_state = START;
+                if (idle_wait_completed) next_state = START;
                 else next_state = IDLE;
             end
             START: begin
-                if (counter >= RESPONSE_WAIT) next_state = RESPONSE;
+                if (counter >= START_LOW) next_state = RESPONSE;
                 else next_state = START;
             end
             RESPONSE: begin
