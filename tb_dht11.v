@@ -33,33 +33,55 @@ module testbench;
         
         #50
         // Step 1: Test if FPGA pulls the signal low for 18ms (start condition)
-        $display("Step 1: Testing FPGA pulling line low for 18ms...");
+        $display("-----------------------");
+        $display("Step 1: IDLE Wait...");
         $display("Current state: %d", dht11_inst.current_state);
         $display("Data pin: %d", data);
-        $display("Waiting for 18ms...");
+        $display("Waiting IDLE...");
+        for (int i = 0; i < 1000; i = i + 1) begin
+            @(posedge clk); 
+        end
+        $display("Counter value: %d", dht11_inst.counter);
+        $display("-----------------------");
+    
+        $display("-----------------------");
+        $display("Step 2: Pull Data Low");
+        $display("Current state: %d", dht11_inst.current_state);
+        $display("Next state: %d", dht11_inst.next_state);
+        $display("Data pin: %d", data);
+        $display("Waiting 18ms...");
         for (int i = 0; i < 900000; i = i + 1) begin
             @(posedge clk); 
         end
-        $display("Counter value after 18ms: %d", dht11_inst.counter);
-        for (int i = 0; i < 15; i = i + 1) begin
-            @(posedge clk); 
-        end
         $display("Data pin: %d", data);
-        $display("Counter value after 18ms: %d", dht11_inst.counter);
+        $display("Counter value: %d", dht11_inst.counter);
         $display("Current state: %d", dht11_inst.current_state);
         $display("Next state: %d", dht11_inst.next_state);
-        $display("Step 1 complete: 18ms passed.");
+        $display("-----------------------");
         
-    
-        $display("Step 2: Waiting for DHT11 response signal for 80us...");
+        $display("-----------------------");
+        $display("Step 3: Wait for response");
+        $display("Current state: %d", dht11_inst.current_state);
+        $display("Next state: %d", dht11_inst.next_state);
+        $display("Data pin: %d", data);
+        $display("Waiting 80us...");
         for (int i = 0; i < 4000; i = i + 1) begin
             @(posedge clk); 
         end
-        $display("Counter value after 80us: %d", dht11_inst.counter);
-        $display("Step 2 complete: 80us passed.");
-        #20
+        #10
+        $display("Data pin: %d", data);
+        $display("Counter value: %d", dht11_inst.counter);
         $display("Current state: %d", dht11_inst.current_state);
-        // End the simulation
+        $display("Next state: %d", dht11_inst.next_state);
+        $display("-----------------------");
+        
+        $display("-----------------------");
+        #100
+        $display("Step 4: Read data");
+        $display("Current state: %d", dht11_inst.current_state);
+        $display("Next state: %d", dht11_inst.next_state);
+        $display("Data pin: %d", data);
+        $display("-----------------------");
         $stop;  // End the simulation
     end
 endmodule
