@@ -1,11 +1,11 @@
 module Top (
-    input wire clk,             // Clock (50 MHz)
-    input wire reset,           // Reset signal
-    inout wire dht11_data,      // DHT11 DATA pin
-    output wire [6:0] hex0,     // 7-segment display for humidity
-    output wire [6:0] hex1,     // 7-segment display for humidity
-    output wire [6:0] hex2,     // 7-segment display for temperature
-    output wire [6:0] hex3      // 7-segment display for temperature
+    input wire clk,             
+    input wire reset,           
+    inout wire dht11_data,      
+    output wire [6:0] hex0,     
+    output wire [6:0] hex1,     
+    output wire [6:0] hex2,     
+    output wire [6:0] hex3      
 );
 
     // Internal signals to store humidity and temperature
