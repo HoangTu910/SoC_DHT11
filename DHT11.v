@@ -94,7 +94,7 @@ module DHT11 (
         end
     end
 
-    // Reading data from DHT11 (store in data_buffer)
+	/* Reading data from DHT11 (store in data_buffer) */
     always @(posedge clk or posedge reset) begin
         if (reset) begin
             data_buffer <= 0;
@@ -107,7 +107,7 @@ module DHT11 (
         end
     end
 
-    // Processing the data and extracting humidity and temperature
+    /* Processing the data and extracting humidity and temperature */
     always @(posedge clk or posedge reset) begin
         if (reset) begin
             humidity <= 0;
@@ -120,7 +120,7 @@ module DHT11 (
         end
     end
 
-    // Update previous data state (for edge detection)
+	/* Update previous data state (for edge detection) */
     always @(posedge clk) begin
         data_prev <= data;
     end
