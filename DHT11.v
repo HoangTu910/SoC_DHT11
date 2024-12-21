@@ -1,128 +1,227 @@
-module DHT11 (
-    input wire clk,            
-    input wire reset,          
-    inout wire data,            
-    output reg [7:0] humidity,  
-    output reg [7:0] temperature, 
-    output reg valid           
+`timescale 1ns / 1ps
+
+module dht11 (
+    input clk50M,
+    inout io_dht11,
+    output [31:0] dht11_data,
+    output reg dht11_data_valid
 );
-	
-    parameter IDLE = 3'b000;
-    parameter START = 3'b001;
-    parameter RESPONSE = 3'b010;
-    parameter READ_DATA = 3'b011;
-    parameter PROCESS = 3'b100;
+    reg o_dht11;
+    reg dht11_o_en;
+    assign io_dht11 = dht11_o_en ? o_dht11 : 1'bz;
 
-    reg [2:0] current_state, next_state;
-	reg data_out; 
-    reg [39:0] data_buffer;     // Data buffer to hold 40 bits of data
-    reg [5:0] bit_index;        // Index to track bits being read
-    reg [19:0] counter;         // Counter for timing purposes
-    reg data_prev;              // Previous data state for edge detection
+    wire clk; // 1us / 1MHz
 
-    // Timing parameters 
-    parameter START_LOW = 900000;    // 18 ms 
-    parameter RESPONSE_WAIT = 4000;  // 80 µs 
-    parameter IDLE_WAIT = 1000;
-	 
-	assign data = (data_out) ? 1'bz : 1'b0;
+    clk_1us_gen #(
+        .CLK_IN(50)
+    ) u_clk_1us_gen (
+        .clk(clk50M),
+        .clk_out_1us(clk)
+    );
 
-    assign start_condition = (counter >= START_LOW);
-    assign response_received = (counter >= RESPONSE_WAIT); 
-    assign idle_wait_completed = (counter >= IDLE_WAIT);
-	
-    /* Rising edge detection for data signal */
-    wire data_signal_detected = (data_prev == 0 && data == 1); 
+    reg rst_n = 0;
 
-    /* Counter Logic */
-	always @(posedge clk or posedge reset) begin
-        if (reset) begin
-            counter <= 0;
-        end 
-        else if(current_state != next_state) begin
-            counter <= 0;
-        end
-        else begin
-            counter <= counter + 1;
+    always @(posedge clk) begin
+        if (!rst_n) begin
+            rst_n <= 1'b1;
         end
     end
 
-    /* FSM Logic */ 
-    always @(posedge clk or posedge reset) begin
-        if (reset) begin
-            current_state <= IDLE;
+    parameter INIT_DELAY_CNT = 3_000_000;
+
+    reg [$clog2(INIT_DELAY_CNT + 1) - 1:0] cnt_3s;
+    reg [$clog2(20_000 + 1) - 1:0] cnt;
+
+    reg io_dht11_r;
+    reg io_dht11_rr;
+    reg io_dht11_rrr;
+
+    always @(posedge clk) begin
+        io_dht11_r <= io_dht11;
+        io_dht11_rr <= io_dht11_r;
+        io_dht11_rrr <= io_dht11_rr;
+    end
+
+    wire dht11_pos = (~io_dht11_rrr) && io_dht11_rr; // Rising edge
+    wire dht11_neg = io_dht11_rrr && (~io_dht11_rr); // Falling edge
+
+    localparam ST_IDLE = 5'b00001;
+    localparam ST_CALL = 5'b00010;
+    localparam ST_WAIT_NEG = 5'b00100;
+    localparam ST_WAIT = 5'b01000;
+    localparam ST_READ_DATA = 5'b10000;
+
+    reg [4:0] state, next_state;
+
+    reg [$clog2(64) - 1:0] bits_cnt;
+
+    reg start_cnt_data;
+
+    reg [39:0] recv_data;
+    wire recv_data_valid;
+
+    assign dht11_data[31:0] = recv_data[39:8];
+    assign recv_data_valid = (recv_data[7:0] != 'h0) && (recv_data[7:0] == (recv_data[39:32] + recv_data[31:24] + recv_data[23:16] + recv_data[15:8]));
+
+    always @(posedge clk) begin
+        if (!rst_n) begin
+            dht11_data_valid <= 1'b0;
         end else begin
-            current_state <= next_state;
+            if (state == ST_IDLE) begin
+                if (recv_data_valid) begin
+                    dht11_data_valid <= 1'b1;
+                end else begin
+                    dht11_data_valid <= 1'b0;
+                end
+            end else begin
+                dht11_data_valid <= 1'b0;
+            end
         end
     end
 
-    /* State transitions logic */
-    always @(*) begin
-        case (current_state)
-            IDLE: begin
-                /* wire start_condition = (counter >= START_LOW); */
-                if (idle_wait_completed) next_state = START;
-                else next_state = IDLE;
+    always @(posedge clk) begin
+        if (!rst_n) begin
+            state <= ST_IDLE;
+        end else begin
+            state <= next_state;
+        end
+    end
+
+    always @* begin
+        case (state)
+            ST_IDLE: begin
+                if (cnt_3s == INIT_DELAY_CNT - 1) begin
+                    next_state = ST_CALL;
+                end else begin
+                    next_state = ST_IDLE;
+                end
             end
-            START: begin
-                if (counter >= START_LOW) next_state = RESPONSE;
-                else next_state = START;
+            ST_CALL: begin
+                if (cnt == 'd20_000 - 1) begin
+                    next_state = ST_WAIT_NEG;
+                end else begin
+                    next_state = ST_CALL;
+                end
             end
-            RESPONSE: begin
-                /* wire response_received = (counter >= RESPONSE_WAIT); */
-                if (response_received) next_state = READ_DATA;
-                else next_state = RESPONSE;
+            ST_WAIT_NEG: begin
+                if (dht11_neg) begin
+                    next_state = ST_WAIT;
+                end else begin
+                    next_state = ST_WAIT_NEG;
+                end
             end
-            READ_DATA: begin
-                if (bit_index == 40) next_state = PROCESS;
-                else next_state = READ_DATA;
+            ST_WAIT: begin
+                if (dht11_pos) begin
+                    next_state = ST_READ_DATA;
+                end else begin
+                    next_state = ST_WAIT;
+                end
             end
-            PROCESS: begin
-                next_state = IDLE; 
+            ST_READ_DATA: begin
+                if (dht11_pos && bits_cnt == 40) begin
+                    next_state = ST_IDLE;
+                end else begin
+                    next_state = ST_READ_DATA;
+                end
             end
-            default: next_state = IDLE;
+            default: next_state = ST_IDLE;
         endcase
     end
 
-    always @(posedge clk or posedge reset) begin
-        if (reset) begin
-            data_out <= 1;
-        end else if (current_state == START && counter < START_LOW) begin
-            data_out <= 0; 
-        end else if (current_state == START && counter >= START_LOW) begin
-            data_out <= 1;  
+    always @(posedge clk) begin
+        if (!rst_n) begin
+            cnt_3s <= 0;
+        end else if (state == ST_IDLE) begin
+            if (cnt_3s == INIT_DELAY_CNT - 1) begin
+                cnt_3s <= 0;
+            end else begin
+                cnt_3s <= cnt_3s + 1'b1;
+            end
+        end else begin
+            cnt_3s <= 0;
         end
     end
 
-	/* Reading data from DHT11 (store in data_buffer) */
-    always @(posedge clk or posedge reset) begin
-        if (reset) begin
-            data_buffer <= 0;
-            bit_index <= 0;
-        end else if (current_state == READ_DATA) begin
-            if (data_signal_detected) begin
-                data_buffer[39 - bit_index] <= data; // Shift data into buffer
-                bit_index <= bit_index + 1;
+    always @(posedge clk) begin
+        if (!rst_n) begin
+            cnt <= 0;
+        end else if (state == ST_CALL) begin
+            if (cnt == 'd20_000 - 1) begin
+                cnt <= 0;
+            end else begin
+                cnt <= cnt + 1'b1;
+            end
+        end else if (state == ST_READ_DATA) begin
+            if (dht11_neg) begin
+                cnt <= 0;
+            end else if (start_cnt_data) begin
+                cnt <= cnt + 1'b1;
+            end else begin
+                cnt <= 0;
+            end
+        end else begin
+            cnt <= 0;
+        end
+    end
+
+    always @(posedge clk) begin
+        if (!rst_n) begin
+            start_cnt_data <= 1'b0;
+        end else if (state == ST_READ_DATA) begin
+            if (dht11_pos) begin
+                start_cnt_data <= 1'b1;
+            end else if (dht11_neg) begin
+                start_cnt_data <= 1'b0;
+            end
+        end else begin
+            start_cnt_data <= 1'b0;
+        end
+    end
+
+    always @(posedge clk) begin
+        if (!rst_n) begin
+            bits_cnt <= 0;
+        end else if (state == ST_READ_DATA) begin
+            if (dht11_neg && (cnt > 0)) begin
+                bits_cnt <= bits_cnt + 1'b1;
+            end
+        end else begin
+            bits_cnt <= 0;
+        end
+    end
+
+    always @(posedge clk) begin
+        if (!rst_n) begin
+            recv_data <= 40'h0;
+        end else if (state == ST_READ_DATA && (dht11_neg && (cnt > 0))) begin
+            if (cnt > 50) begin
+                recv_data <= {recv_data[38:0], 1'b1};
+            end else begin
+                recv_data <= {recv_data[38:0], 1'b0};
             end
         end
     end
 
-    /* Processing the data and extracting humidity and temperature */
-    always @(posedge clk or posedge reset) begin
-        if (reset) begin
-            humidity <= 0;
-            temperature <= 0;
-            valid <= 0;
-        end else if (current_state == PROCESS) begin
-            humidity <= data_buffer[39:32];      // Extract humidity (8 bits)
-            temperature <= data_buffer[23:16];   // Extract temperature (8 bits)
-            valid <= 1;                          // Set valid flag
-        end
-    end
-
-	/* Update previous data state (for edge detection) */
     always @(posedge clk) begin
-        data_prev <= data;
+        if (!rst_n) begin
+            o_dht11 <= 1'b1;
+            dht11_o_en <= 1'b1;
+        end else begin
+            case (state)
+                ST_IDLE: begin
+                    o_dht11 <= 1'b1;
+                    dht11_o_en <= 1'b0;
+                end
+                ST_CALL: begin
+                    o_dht11 <= 1'b0;
+                    dht11_o_en <= 1'b1;
+                end
+                ST_WAIT_NEG, ST_WAIT, ST_READ_DATA: begin
+                    o_dht11 <= 1'b1;
+                    dht11_o_en <= 1'b0;
+                end
+            endcase
+        end
     end
 
 endmodule

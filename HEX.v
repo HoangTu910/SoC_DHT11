@@ -1,6 +1,6 @@
 module HEX (
-    input wire [7:0] value,    
-    output reg [6:0] hex      
+    input wire [7:0] value,    // 8-bit value to display
+    output reg [6:0] hex       // 7-segment display output
 );
 
     always @(*) begin
@@ -21,7 +21,7 @@ module HEX (
 			  8'h0D: hex = 7'b0100001; // d
 			  8'h0E: hex = 7'b0000110; // E
 			  8'h0F: hex = 7'b0001110; // F
-			  default: hex = 7'b0000000; // Default to all on
+			  default: hex = 7'b1111111; // Default to all on
 		 endcase
 	end
 endmodule
